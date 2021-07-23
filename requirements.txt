@@ -1,3 +1,7 @@
+# basic requirements
+ipython
+jupyter
+# run requirements
 python-chromedriver-binary
 selenium
 tqdm
