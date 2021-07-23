@@ -14,7 +14,7 @@ $ python -m pip install --requirement requirements.txt
 
 ## To run
 
-You can start a Jupyter server on the command-line via:
+You can start a [Jupyter](https://jupyter.org) server on the command-line via:
 
 ```bash
 $ jupyter notebook
