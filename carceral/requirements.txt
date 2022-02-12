@@ -1,0 +1,5 @@
+gwpy
+matplotlib
+scipy
+tabula-py
+tqdm
