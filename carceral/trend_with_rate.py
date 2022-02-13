@@ -9,7 +9,7 @@ from gwpy.timeseries import TimeSeries
 from matplotlib import use
 use("Agg")
 
-from matplotlib import font_manager, pyplot, rcParams
+from matplotlib import font_manager, pyplot, rcParams  # noqa: E402
 
 
 # set font properties
