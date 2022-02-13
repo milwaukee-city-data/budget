@@ -1,5 +1,6 @@
 import csv
 import json
+import os
 
 from gwpy.time import to_gps
 from gwpy.timeseries import (TimeSeries, TimeSeriesDict)
@@ -31,7 +32,7 @@ def plot_incarcerated_youth(data):
     ]
     trends = _unpack_data(data, fields)
     idx = data["ethan_allen_count"].index(0)
-    xticks = [str(n) for n in range(2008, 2022)]
+    xticks = [str(n) for n in range(2008, 2023)]
 
     # plot raw counts
     plot = trends[fields[0]].plot(
@@ -68,7 +69,7 @@ def plot_incarcerated_youth(data):
         linewidth=1.25,
     )
     ax.set_xlabel("Calendar year")
-    ax.set_xlim([float(to_gps("2008-01-01")), float(to_gps("2021-08-06"))])
+    ax.set_xlim([float(to_gps("2008-01-01")), float(to_gps("now"))])
     ax.set_xticks([float(to_gps(f"{yr}-01-01")) for yr in xticks])
     ax.set_xticklabels(xticks)
     ax.tick_params(axis="x", which="minor", bottom=False)
@@ -76,7 +77,7 @@ def plot_incarcerated_youth(data):
     ax.set_ylim([0, 650])
     ax.grid(color="#0d2240", alpha=0.4, linestyle="dotted")
     ax.legend(loc="upper right")
-    plot.savefig("fig/doc-youth-count.pdf", bbox_inches="tight")
+    plot.savefig("fig/doc-youth-count.png", bbox_inches="tight", dpi=300)
     plot.close()
 
 
@@ -92,7 +93,7 @@ def plot_incarcerated_total(data):
         "female_minimum_security_percentage",
     ]
     trends = _unpack_data(data, fields)
-    xticks = [str(n) for n in range(2018, 2022)]
+    xticks = [str(n) for n in range(2018, 2023)]
 
     # plot percentage relative to design capacity
     plot = trends[fields[0]].plot(
@@ -145,11 +146,11 @@ def plot_incarcerated_total(data):
         linewidth=1,
     )
     ax.set_xlabel("Calendar year")
-    ax.set_xlim([float(to_gps("2018-01-01")), float(to_gps("2021-08-06"))])
+    ax.set_xlim([float(to_gps("2018-01-01")), float(to_gps("now"))])
     ax.set_xticks(
         [float(to_gps(f"{yr}-{mo}-01"))
          for yr in xticks for mo in range(2, 13)
-         if to_gps(f"{yr}-{mo}-01") < to_gps("2021-08-06")],
+         if to_gps(f"{yr}-{mo}-01") < to_gps("now")],
         minor=True,
     )
     ax.set_xticks([float(to_gps(f"{yr}-01-01")) for yr in xticks])
@@ -169,7 +170,7 @@ def plot_incarcerated_total(data):
     )
     ax.grid(color="#0d2240", alpha=0.4, linestyle="dotted")
     ax.legend(loc="upper right")
-    plot.savefig("fig/doc-total-percent.pdf", bbox_inches="tight")
+    plot.savefig("fig/doc-total-percent.png", bbox_inches="tight", dpi=300)
     plot.close()
 
 
@@ -184,7 +185,7 @@ def plot_incarcerated_adult(data):
         "female_minimum_security_count",
     ]
     trends = _unpack_data(data, fields)
-    xticks = [str(n) for n in range(2018, 2022)]
+    xticks = [str(n) for n in range(2018, 2023)]
 
     # plot raw counts
     plot = (trends[fields[0]] / 1e3).plot(
@@ -240,11 +241,11 @@ def plot_incarcerated_adult(data):
         linewidth=1,
     )
     ax.set_xlabel("Calendar year")
-    ax.set_xlim([float(to_gps("2018-01-01")), float(to_gps("2021-08-06"))])
+    ax.set_xlim([float(to_gps("2018-01-01")), float(to_gps("now"))])
     ax.set_xticks(
         [float(to_gps(f"{yr}-{mo}-01"))
          for yr in xticks for mo in range(2, 13)
-         if to_gps(f"{yr}-{mo}-01") < to_gps("2021-08-06")],
+         if to_gps(f"{yr}-{mo}-01") < to_gps("now")],
         minor=True,
     )
     ax.set_xticks([float(to_gps(f"{yr}-01-01")) for yr in xticks])
@@ -255,7 +256,7 @@ def plot_incarcerated_adult(data):
     ax.text(float(to_gps("2020-04-01")), 43, "COVID-19 lockdown\nbegins")
     ax.grid(color="#0d2240", alpha=0.4, linestyle="dotted")
     ax.legend(loc="upper left", bbox_to_anchor=(0, 0.79))
-    plot.savefig("fig/doc-total-count.pdf", bbox_inches="tight")
+    plot.savefig("fig/doc-total-count.png", bbox_inches="tight", dpi=300)
     plot.close()
 
 
@@ -265,6 +266,9 @@ if __name__ == "__main__":
     # load from JSON
     with open("doc-population-trends.json", "r") as datafile:
         trends = json.load(datafile)
+
+    # prepare output destination
+    os.makedirs("fig", exist_ok=True)
 
     # render population trends as timeseries figures
     plot_incarcerated_youth(trends)

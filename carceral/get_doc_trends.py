@@ -6,11 +6,18 @@ relative to the state's reported design capacity in each category.
 """
 
 import json
-import os.path
+import os
+import requests
+import shutil
 import tabula
 import tqdm
+import zipfile
 
 from datetime import (datetime, timedelta)
+from io import BytesIO
+
+# is it now?
+NOW = datetime.now()
 
 # global data object
 POPULATION_DATA = {
@@ -50,7 +57,13 @@ POPULATION_DATA = {
     "female_minimum_security_count": [],
     "female_minimum_security_percentage": [],
 }
+
+# data source URLs
 SOURCE_URL = "https://doc.wi.gov/DataResearch/WeeklyPopulationReports"
+ARCHIVE_URL = "https://doc.wi.gov/DataResearch/ArchivedPopulationReports/"
+
+# list of intermediate data folders to clean
+FOLDERS_TO_CLEAN = []
 
 
 # -- utilities ----------------------------------------------------------------
@@ -64,20 +77,41 @@ def _parse_int(qty):
         return qty
 
 
-def _get_filename(date):
+def _download_archive(year):
+    response = requests.get(f"{ARCHIVE_URL}/{year}.zip", stream=True)
+    # download and unzip the report archive for the given year
+    with zipfile.ZipFile(
+        BytesIO(response.raw.read()),
+        "r",
+    ) as archive:
+        archive.extractall(".")
+        # for archives after 2016, ensure the
+        # target is simply named for the year
+        (target, ) = tuple(set(
+            [os.path.dirname(filename) for filename in archive.namelist()]
+        ))
+        os.rename(target, year)
+
+
+def _get_published_data_from_date(date):
+    year = str(date.year)
     base = (
         date.strftime("%Y.%m.%d")
         if date < datetime(2016, 1, 1)
         else date.strftime("%m%d%Y")
     )
     source = (
-        os.path.join(str(date.year), f"{base}.pdf")
-        if date < datetime(2021, 1, 1)
+        os.path.join(year, f"{base}.pdf")
+        if date < datetime(NOW.year, 1, 1)
         else f"{SOURCE_URL}/{base}.pdf"
     )
+    # retrieve PDF archive if needed
+    if not source.startswith(SOURCE_URL) and not os.path.exists(year):
+        _download_archive(year)
+        FOLDERS_TO_CLEAN.append(year)
     # handle special case for federal holidays
     if not source.startswith(SOURCE_URL) and not os.path.exists(source):
-        return _get_filename(date - timedelta(days=1))
+        return _get_published_data_from_date(date - timedelta(days=1))
     return source
 
 
@@ -105,17 +139,32 @@ def _attempt_search_with_fallback(frame, col, search, target=None):
         POPULATION_DATA[f"{target}_percentage"].append(0)
 
 
-def get_publication_dates(year=2008, month=1, day=4):
-    """Construct calendar dates for all publications in a given year"""
-    (dates, files) = ([], [])
-    dateobj = datetime(year, month, day)
-    while dateobj < datetime.now():
-        if dateobj == datetime(2013, 1, 4):
-            dateobj += timedelta(days=7)  # malformed data file
-        dates.append(dateobj.strftime("%m-%d-%Y"))
-        files.append(_get_filename(dateobj))
-        dateobj += timedelta(days=7)
-    return (dates, files)
+def get_publication_filenames(start=2008):
+    """Construct calendar dates for all publications since a given date"""
+    publication_dates = [
+        datetime.fromordinal(ordinal)
+        for ordinal in range(
+            datetime(start, 1, 1).toordinal(),
+            NOW.toordinal(),
+        )
+        if datetime.fromordinal(ordinal).weekday() == 4
+        and datetime.fromordinal(ordinal) != datetime(2013, 1, 4)
+    ]
+    # return a list of records published on these dates,
+    # except for a malformed data file on 2013-01-04
+    sources = [
+        _get_published_data_from_date(pubdate)
+        for pubdate in tqdm.tqdm(
+            publication_dates,
+            total=len(publication_dates),
+            desc="Obtaining records",
+        )
+    ]
+    dates = [
+        pubdate.strftime("%m-%d-%Y")
+        for pubdate in publication_dates
+    ]
+    return (sources, dates)
 
 
 def parse_totals(data):
@@ -216,22 +265,27 @@ def parse_facility_youths(data):
     _attempt_search_with_fallback(frame, 3, "Southern Oaks")
 
 
-def get_trends():
+def get_trends(cleanup=True):
     """Retrieve inmate population figures from state records"""
     # get publication dates
-    (dates, files) = get_publication_dates()
-    POPULATION_DATA["publication_date"] = dates
+    (sources, pubdates) = get_publication_filenames()
+    POPULATION_DATA["publication_date"] = pubdates
 
     # range over PDF reports and scrape population trends
-    for (pubdate, source) in tqdm.tqdm(zip(dates, files), total=len(dates)):
-        data = tabula.read_pdf(  # retrieve from Wisconsin DOC
-            source,
-            pages="all",
-        )
+    for source in tqdm.tqdm(
+        sources,
+        total=len(sources),
+        desc="Scraping records",
+    ):
+        data = tabula.read_pdf(source, pages="all")
         parse_totals(data)  # total inmate population
         parse_incarcerated_males(data)  # incarcerated male poulation
         parse_incarcerated_females(data)  # incarcerated female population
         parse_facility_youths(data)  # facility youth population
+
+    if cleanup:  # clean up downloaded PDFs
+        for folder in FOLDERS_TO_CLEAN:
+            shutil.rmtree(folder)
 
 
 # -- main block ---------------------------------------------------------------
